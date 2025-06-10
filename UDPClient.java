@@ -1,4 +1,5 @@
 import java.io.*;
+import java.net.*;
 import java.util.*;
 
 public class UDPClient {
@@ -12,7 +13,6 @@ public class UDPClient {
         int port;
         String fileList = args[2];
 
-        // Parse port number
         try {
             port = Integer.parseInt(args[1]);
         } catch (NumberFormatException e) {
@@ -20,7 +20,6 @@ public class UDPClient {
             return;
         }
 
-        // Read file list
         List<String> files = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(fileList))) {
             String line;
@@ -35,7 +34,22 @@ public class UDPClient {
             return;
         }
 
-        System.out.println("Files to download: " + files);
-        // TODO: Implement socket communication
+        try (DatagramSocket socket = new DatagramSocket()) {
+            InetAddress serverAddress = InetAddress.getByName(hostname);
+
+            // Process each file
+            for (String filename : files) {
+                String message = "DOWNLOAD " + filename;
+                byte[] sendData = message.getBytes();
+                DatagramPacket sendPacket = new DatagramPacket(
+                    sendData, sendData.length, serverAddress, port
+                );
+                socket.send(sendPacket);
+                System.out.println("Sent: " + message);
+                // TODO: Receive response
+            }
+        } catch (IOException e) {
+            System.out.println("Socket error: " + e.getMessage());
+        }
     }
 }
