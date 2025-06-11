@@ -2,10 +2,14 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
+/**
+ * UDPClient implements a file download client using UDP with reliable transmission.
+ * It reads a list of files from a text file and downloads each file from a server.
+ */
 public class UDPClient {
-    private static final int INITIAL_TIMEOUT = 1000; // 1 second
-    private static final int MAX_RETRIES = 5;
-    private static final int BLOCK_SIZE = 1000; // Bytes per block
+    private static final int INITIAL_TIMEOUT = 1000; // Initial timeout in ms
+    private static final int MAX_RETRIES = 5;       // Max retransmission attempts
+    private static final int BLOCK_SIZE = 1000;     // Bytes per data block
 
     public static void main(String[] args) {
         if (args.length != 3) {
@@ -17,6 +21,7 @@ public class UDPClient {
         int port;
         String fileList = args[2];
 
+        // Parse port number
         try {
             port = Integer.parseInt(args[1]);
         } catch (NumberFormatException e) {
@@ -24,6 +29,7 @@ public class UDPClient {
             return;
         }
 
+        // Read list of files to download
         List<String> files = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(fileList))) {
             String line;
@@ -38,11 +44,13 @@ public class UDPClient {
             return;
         }
 
+        // Create UDP socket and process each file
         try (DatagramSocket socket = new DatagramSocket()) {
             InetAddress serverAddress = InetAddress.getByName(hostname);
 
             for (String filename : files) {
                 System.out.println("Downloading " + filename);
+                // Send DOWNLOAD request
                 String message = "DOWNLOAD " + filename;
                 String response = sendAndReceive(socket, serverAddress, port, message);
                 if (response == null || response.startsWith("ERR")) {
@@ -50,7 +58,7 @@ public class UDPClient {
                     continue;
                 }
 
-                // Parse OK response
+                // Parse OK response for file size and data port
                 String[] parts = response.split(" ");
                 if (parts.length < 6 || !parts[0].equals("OK")) {
                     System.out.println("Invalid response: " + response);
@@ -60,12 +68,11 @@ public class UDPClient {
                 int dataPort = Integer.parseInt(parts[5]);
                 System.out.println(filename + " size: " + fileSize + " bytes, data port: " + dataPort);
 
-                // Create file
+                // Download and save file
                 try (RandomAccessFile raf = new RandomAccessFile(filename, "rw")) {
-                    raf.setLength(fileSize); // Pre-allocate file
+                    raf.setLength(fileSize);
                     long currentPos = 0;
 
-                    // Download file in blocks
                     while (currentPos < fileSize) {
                         long endPos = Math.min(currentPos + BLOCK_SIZE - 1, fileSize - 1);
                         String getMessage = "FILE " + filename + " GET START " + currentPos + " END " + endPos;
@@ -75,7 +82,7 @@ public class UDPClient {
                             break;
                         }
 
-                        // Parse data response
+                        // Decode and write data
                         String[] dataParts = dataResponse.split(" ", 7);
                         if (dataParts.length < 7 || !dataParts[2].equals("OK")) {
                             System.out.println("Invalid data response: " + dataResponse);
@@ -105,10 +112,18 @@ public class UDPClient {
         }
     }
 
+    /**
+     * Sends a message and waits for a response, retrying on timeout.
+     * @param socket The UDP socket
+     * @param address The server address
+     * @param port The server port
+     * @param message The message to send
+     * @return The response message or null if failed
+     */
     private static String sendAndReceive(DatagramSocket socket, InetAddress address, int port, String message) {
         int currentTimeout = INITIAL_TIMEOUT;
         int retries = 0;
-        byte[] buffer = new byte[2048]; // Increased for Base64 data
+        byte[] buffer = new byte[2048];
 
         while (retries < MAX_RETRIES) {
             try {
